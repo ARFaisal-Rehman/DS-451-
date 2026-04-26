@@ -1,0 +1,801 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AcadVis — Student Performance Dashboard</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.9.0/d3.min.js"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,700;1,400&family=DM+Mono:ital,wght@0,300;0,400;0,500;1,300&display=swap" rel="stylesheet">
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#0c0c14;--bg2:#12121e;--bg3:#1a1a2a;--bg4:#202030;
+  --border:rgba(255,255,255,0.07);--gold:#e8b86d;--gold2:rgba(232,184,109,0.12);
+  --teal:#5ecbcb;--text:#bbbbd0;--text-dim:#5a5a72;--text-bright:#eeeef8;
+  --red:#e06b6b;--green:#6dbf6d;--radius:7px;
+}
+html,body{height:100%;background:var(--bg);color:var(--text);font-family:'DM Mono',monospace;overflow:hidden}
+
+/* HEADER */
+header{
+  display:flex;align-items:center;justify-content:space-between;
+  padding:14px 24px;border-bottom:1px solid var(--border);background:var(--bg2);
+  height:52px;flex-shrink:0;
+}
+header h1{font-family:'Playfair Display',serif;font-size:20px;font-weight:700;color:var(--text-bright);letter-spacing:-0.3px}
+header h1 em{color:var(--gold);font-style:italic}
+.header-right{display:flex;gap:16px;align-items:center}
+.header-badge{
+  font-size:9px;text-transform:uppercase;letter-spacing:1.5px;color:var(--text-dim);
+  border:1px solid var(--border);padding:3px 8px;border-radius:3px
+}
+
+/* LAYOUT */
+.app{display:grid;grid-template-columns:252px 1fr;height:calc(100vh - 52px);overflow:hidden}
+
+/* SIDEBAR */
+.sidebar{
+  background:var(--bg2);border-right:1px solid var(--border);
+  overflow-y:auto;padding:14px 12px;display:flex;flex-direction:column;gap:10px
+}
+.sidebar::-webkit-scrollbar{width:3px}
+.sidebar::-webkit-scrollbar-thumb{background:var(--bg4);border-radius:2px}
+
+.sec-hd{
+  font-size:8.5px;text-transform:uppercase;letter-spacing:2px;color:var(--gold);
+  display:flex;align-items:center;gap:6px;margin-bottom:7px
+}
+.sec-hd::after{content:'';flex:1;height:1px;background:var(--gold2)}
+
+.panel{
+  background:var(--bg3);border:1px solid var(--border);border-radius:var(--radius);
+  padding:11px 12px
+}
+
+label{
+  display:block;font-size:9px;color:var(--text-dim);text-transform:uppercase;
+  letter-spacing:0.8px;margin:8px 0 3px
+}
+label:first-child{margin-top:0}
+
+select{
+  width:100%;background:var(--bg2);border:1px solid var(--border);color:var(--text);
+  font-family:'DM Mono',monospace;font-size:10.5px;padding:5px 22px 5px 7px;
+  border-radius:4px;cursor:pointer;outline:none;appearance:none;
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M0 0l5 6 5-6z' fill='%235a5a72'/%3E%3C/svg%3E");
+  background-repeat:no-repeat;background-position:right 7px center;transition:border-color .15s
+}
+select:hover,select:focus{border-color:var(--gold)}
+
+input[type=range]{
+  width:100%;appearance:none;height:3px;background:var(--bg4);border-radius:2px;
+  outline:none;margin:5px 0 1px;cursor:pointer
+}
+input[type=range]::-webkit-slider-thumb{
+  appearance:none;width:12px;height:12px;background:var(--gold);
+  border-radius:50%;cursor:pointer;transition:transform .15s
+}
+input[type=range]::-webkit-slider-thumb:hover{transform:scale(1.35)}
+.range-val{font-size:10px;color:var(--gold);float:right}
+
+.btn{
+  display:block;width:100%;padding:7px 10px;background:var(--bg2);
+  border:1px solid var(--border);color:var(--text);font-family:'DM Mono',monospace;
+  font-size:9px;text-transform:uppercase;letter-spacing:1.5px;border-radius:4px;
+  cursor:pointer;transition:all .18s;text-align:center;margin-top:8px
+}
+.btn:hover{border-color:var(--gold);color:var(--gold);background:var(--gold2)}
+.btn.active{border-color:var(--gold);color:var(--gold);background:var(--gold2)}
+.btn.danger:hover{border-color:var(--red);color:var(--red);background:rgba(224,107,107,.1)}
+
+/* Stats */
+.stats-grid{display:grid;grid-template-columns:1fr 1fr;gap:5px}
+.stat-box{background:var(--bg2);border:1px solid var(--border);border-radius:4px;padding:7px 8px;text-align:center}
+.stat-val{font-family:'Playfair Display',serif;font-size:17px;color:var(--text-bright);line-height:1}
+.stat-lbl{font-size:8px;color:var(--text-dim);text-transform:uppercase;letter-spacing:.5px;margin-top:3px}
+
+/* Detail panel */
+.detail-empty{font-size:10px;color:var(--text-dim);text-align:center;padding:16px 0;font-style:italic}
+.detail-row{
+  display:flex;justify-content:space-between;align-items:center;
+  font-size:9.5px;padding:3px 0;border-bottom:1px solid rgba(255,255,255,.03)
+}
+.detail-row:last-child{border-bottom:none}
+.dk{color:var(--text-dim);text-transform:uppercase;letter-spacing:.4px;font-size:8.5px}
+.dv{color:var(--text-bright)}
+.dv.good{color:var(--green)}
+.dv.warn{color:var(--gold)}
+.dv.bad{color:var(--red)}
+
+/* MAIN */
+.main{display:flex;flex-direction:column;overflow:hidden}
+.scatter-area{flex:1;min-height:0;padding:14px 18px 8px;position:relative;display:flex;flex-direction:column}
+.chart-hd{font-family:'Playfair Display',serif;font-size:14px;color:var(--text-bright);margin-bottom:3px}
+.badges{margin-bottom:6px}
+.badge{
+  display:inline-block;font-size:7.5px;text-transform:uppercase;letter-spacing:1px;
+  padding:1px 5px;border-radius:3px;background:var(--gold2);color:var(--gold);
+  border:1px solid rgba(232,184,109,.25);margin-right:3px
+}
+#legend{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:6px}
+.leg-item{display:flex;align-items:center;gap:4px;font-size:9px;color:var(--text-dim);cursor:pointer;transition:color .15s}
+.leg-item:hover{color:var(--text)}
+.leg-dot{width:7px;height:7px;border-radius:50%;flex-shrink:0}
+
+.scatter-wrap{flex:1;min-height:0;position:relative}
+#scatterSvg{display:block;width:100%;height:100%}
+
+/* BOTTOM CHARTS */
+.bottom-row{
+  display:grid;grid-template-columns:1fr 1fr;border-top:1px solid var(--border);
+  height:195px;flex-shrink:0
+}
+.bot-chart{padding:10px 16px;position:relative;overflow:hidden}
+.bot-chart+.bot-chart{border-left:1px solid var(--border)}
+.bot-title{font-family:'Playfair Display',serif;font-size:11.5px;color:var(--text-bright);margin-bottom:2px}
+.bot-sub{font-size:8px;color:var(--text-dim);margin-bottom:6px}
+
+/* SVG axes/grid styles */
+.axis text{fill:var(--text-dim);font-size:9px;font-family:'DM Mono',monospace}
+.axis line,.axis path{stroke:var(--border)}
+.grid line{stroke:rgba(255,255,255,.04);stroke-dasharray:3,3}
+.grid path{stroke:none}
+
+/* Brush */
+.brush .selection{fill:rgba(232,184,109,.08);stroke:var(--gold);stroke-width:1}
+
+/* Tooltip */
+.tooltip{
+  position:fixed;background:rgba(18,18,30,.96);border:1px solid var(--gold);
+  border-radius:6px;padding:10px 13px;font-size:10.5px;pointer-events:none;
+  opacity:0;transition:opacity .12s;z-index:1000;max-width:210px;
+  box-shadow:0 8px 30px rgba(0,0,0,.5);backdrop-filter:blur(8px)
+}
+.tooltip.vis{opacity:1}
+.tt-title{font-family:'Playfair Display',serif;font-size:13px;color:var(--text-bright);margin-bottom:7px;padding-bottom:5px;border-bottom:1px solid var(--border)}
+.tt-row{display:flex;justify-content:space-between;gap:14px;padding:1.5px 0}
+.tt-k{color:var(--text-dim)}
+.tt-v{color:var(--gold);font-weight:500}
+</style>
+</head>
+<body>
+
+<header>
+  <h1>Acad<em>Vis</em> — Student Performance Dashboard</h1>
+  <div class="header-right">
+    <span class="header-badge">1,200 Records</span>
+    <span class="header-badge">DS351L · A3</span>
+    <span class="header-badge">7 Interaction Types</span>
+  </div>
+</header>
+
+<div class="app">
+
+  <!-- ─── SIDEBAR ─── -->
+  <aside class="sidebar">
+
+    <!-- ABSTRACT -->
+    <div class="panel">
+      <div class="sec-hd">7 · Abstract / Detail</div>
+      <button class="btn" id="btnAbstract">⬡ Aggregate View — By Major</button>
+    </div>
+
+    <!-- RECONFIGURE -->
+    <div class="panel">
+      <div class="sec-hd">5 · Reconfigure Axes</div>
+      <label>X Axis</label>
+      <select id="xAxis">
+        <option value="study_hours">Study Hours / Week</option>
+        <option value="sleep_hours">Sleep Hours / Night</option>
+        <option value="attendance_pct">Attendance %</option>
+        <option value="stress_level">Stress Level (1–10)</option>
+        <option value="age">Age</option>
+        <option value="semester">Semester</option>
+        <option value="mental_health_score">Mental Health Score</option>
+      </select>
+      <label>Y Axis</label>
+      <select id="yAxis">
+        <option value="gpa">GPA (0–4.0)</option>
+        <option value="mental_health_score">Mental Health Score</option>
+        <option value="attendance_pct">Attendance %</option>
+        <option value="study_hours">Study Hours / Week</option>
+        <option value="stress_level">Stress Level</option>
+        <option value="sleep_hours">Sleep Hours / Night</option>
+      </select>
+    </div>
+
+    <!-- ENCODE -->
+    <div class="panel">
+      <div class="sec-hd">3 · Encode Color</div>
+      <label>Color Points By</label>
+      <select id="colorBy">
+        <option value="major">Major</option>
+        <option value="gender">Gender</option>
+        <option value="stress_level">Stress Level</option>
+        <option value="scholarship">Scholarship Status</option>
+        <option value="part_time_job">Part-time Employment</option>
+        <option value="semester">Semester</option>
+      </select>
+    </div>
+
+    <!-- FILTER -->
+    <div class="panel">
+      <div class="sec-hd">2 · Filter</div>
+      <label>Major</label>
+      <select id="fMajor">
+        <option value="All">All Majors</option>
+        <option>Computer Science</option>
+        <option>Data Science</option>
+        <option>Electrical Eng.</option>
+        <option>Mechanical Eng.</option>
+        <option>Business</option>
+        <option>Mathematics</option>
+        <option>Physics</option>
+        <option>Psychology</option>
+      </select>
+      <label>Gender</label>
+      <select id="fGender">
+        <option value="All">All Genders</option>
+        <option>Male</option>
+        <option>Female</option>
+        <option>Non-binary</option>
+      </select>
+      <label>Min GPA &nbsp;<span class="range-val" id="gpaMinV">1.0</span></label>
+      <input type="range" id="gpaMin" min="1" max="4" step="0.1" value="1">
+      <label>Max GPA &nbsp;<span class="range-val" id="gpaMaxV">4.0</span></label>
+      <input type="range" id="gpaMax" min="1" max="4" step="0.1" value="4">
+      <label>Min Study Hrs &nbsp;<span class="range-val" id="studyMinV">5h</span></label>
+      <input type="range" id="studyMin" min="5" max="35" step="1" value="5">
+      <button class="btn danger" id="btnReset">↺ Reset All Filters</button>
+    </div>
+
+    <!-- STATS -->
+    <div class="panel">
+      <div class="sec-hd">Summary Stats</div>
+      <div class="stats-grid">
+        <div class="stat-box"><div class="stat-val" id="sCount">1200</div><div class="stat-lbl">Students</div></div>
+        <div class="stat-box"><div class="stat-val" id="sGpa">—</div><div class="stat-lbl">Avg GPA</div></div>
+        <div class="stat-box"><div class="stat-val" id="sStudy">—</div><div class="stat-lbl">Study Hrs</div></div>
+        <div class="stat-box"><div class="stat-val" id="sSchol">—</div><div class="stat-lbl">Scholars</div></div>
+      </div>
+    </div>
+
+    <!-- SELECT / DETAIL -->
+    <div class="panel">
+      <div class="sec-hd">1 · Selected Student</div>
+      <div class="detail-empty" id="detailEmpty">Click any data point<br>to inspect its record</div>
+      <div id="detailContent"></div>
+    </div>
+
+  </aside>
+
+  <!-- ─── MAIN ─── -->
+  <main class="main">
+
+    <div class="scatter-area">
+      <div class="chart-hd" id="scatterTitle">Study Hours vs. GPA</div>
+      <div class="badges">
+        <span class="badge">1 · Select</span>
+        <span class="badge">4 · Connect</span>
+        <span class="badge">6 · Elaborate</span>
+        <span class="badge">5 · Reconfigure</span>
+        <span class="badge">7 · Abstract</span>
+        <span style="font-size:9px;color:var(--text-dim);margin-left:4px">
+          Drag to brush-select · Click dot to inspect · Click bar to highlight major
+        </span>
+      </div>
+      <div id="legend"></div>
+      <div class="scatter-wrap" id="scatterWrap">
+        <svg id="scatterSvg"></svg>
+      </div>
+    </div>
+
+    <div class="bottom-row">
+      <div class="bot-chart">
+        <div class="bot-title">Average GPA by Major</div>
+        <div class="bot-sub">
+          <span class="badge">2 · Filter</span>
+          <span class="badge">4 · Connect</span>
+          Click a bar to highlight that major across all charts
+        </div>
+        <svg id="barSvg"></svg>
+      </div>
+      <div class="bot-chart">
+        <div class="bot-title">GPA Distribution</div>
+        <div class="bot-sub">
+          <span class="badge">2 · Filter</span>
+          <span class="badge">3 · Encode</span>
+          Histogram updates with active filters &amp; selection
+        </div>
+        <svg id="histSvg"></svg>
+      </div>
+    </div>
+
+  </main>
+</div>
+
+<div class="tooltip" id="tooltip">
+  <div class="tt-title" id="ttTitle"></div>
+  <div id="ttBody"></div>
+</div>
+
+<script>
+// ╔══════════════════════════════════════════════════════════════╗
+// ║  DATA GENERATION — 1,200 synthetic student records          ║
+// ╚══════════════════════════════════════════════════════════════╝
+
+function lcg(seed){
+  let s=seed>>>0;
+  return()=>{s=(Math.imul(1664525,s)+1013904223)>>>0;return s/0x100000000};
+}
+const rnd=lcg(271828);
+
+const MAJORS=['Computer Science','Data Science','Electrical Eng.','Mechanical Eng.','Business','Mathematics','Physics','Psychology'];
+const GENDERS=['Male','Female','Non-binary'];
+const MAJOR_BIAS={'Computer Science':.08,'Data Science':.14,'Electrical Eng.':-.02,'Mechanical Eng.':-.08,'Business':-.1,'Mathematics':.18,'Physics':.05,'Psychology':-.07};
+
+const students=Array.from({length:1200},(_,i)=>{
+  const major=MAJORS[Math.floor(rnd()*8)];
+  const g=rnd();
+  const gender=g<.47?'Male':g<.94?'Female':'Non-binary';
+  const semester=Math.ceil(rnd()*8);
+  const age=18+Math.floor(rnd()*5)+Math.floor(semester/2);
+  const study_hours=Math.round((5+rnd()*28)*10)/10;
+  const sleep_hours=Math.round((4+rnd()*5)*10)/10;
+  const attendance_pct=Math.round((38+rnd()*62)*10)/10;
+  const stress_level=Math.ceil(rnd()*10);
+  const mental_health_score=Math.max(1,Math.min(10,Math.round(10-stress_level*.4+rnd()*3.2)));
+  const raw_gpa=1.0+(study_hours/33)*2.4+MAJOR_BIAS[major]+(rnd()-.5)*1.1;
+  const gpa=Math.round(Math.max(1.0,Math.min(4.0,raw_gpa))*100)/100;
+  const scholarship=gpa>=3.5&&rnd()<.62;
+  const part_time_job=rnd()<.3;
+  const extracurriculars=Math.floor(rnd()*4);
+  return{id:i+1,age,gender,major,semester,study_hours,sleep_hours,
+         attendance_pct,stress_level,mental_health_score,gpa,
+         scholarship,part_time_job,extracurriculars};
+});
+
+// ╔══════════════════════════════════════════════════════════════╗
+// ║  STATE                                                       ║
+// ╚══════════════════════════════════════════════════════════════╝
+
+const S={
+  xKey:'study_hours',yKey:'gpa',colorKey:'major',
+  fMajor:'All',fGender:'All',gpaMin:1,gpaMax:4,studyMin:5,
+  selectedId:null,brushedIds:null,highlightMajor:null,aggregated:false
+};
+
+// ╔══════════════════════════════════════════════════════════════╗
+// ║  COLOR SCALES                                                ║
+// ╚══════════════════════════════════════════════════════════════╝
+
+const majorPalette=['#e8b86d','#5ecbcb','#e06b6b','#7ecf7e','#c47dc4','#7daee8','#e89a6d','#a8cf6d'];
+const majorColor=d3.scaleOrdinal().domain(MAJORS).range(majorPalette);
+const genderColor=d3.scaleOrdinal().domain(['Male','Female','Non-binary']).range(['#7daee8','#e06b6b','#c47dc4']);
+const stressColor=d3.scaleSequential().domain([1,10]).interpolator(d3.interpolateRdYlGn);
+const scholColor=d3.scaleOrdinal().domain([true,false]).range(['#e8b86d','#5ecbcb']);
+const ptColor=d3.scaleOrdinal().domain([true,false]).range(['#e06b6b','#7ecf7e']);
+const semColor=d3.scaleSequential().domain([1,8]).interpolator(d3.interpolatePlasma);
+
+function getColor(d){
+  switch(S.colorKey){
+    case'major':return majorColor(d.major);
+    case'gender':return genderColor(d.gender);
+    case'stress_level':return stressColor(d.stress_level);
+    case'scholarship':return scholColor(d.scholarship);
+    case'part_time_job':return ptColor(d.part_time_job);
+    case'semester':return semColor(d.semester);
+  }
+}
+
+// ╔══════════════════════════════════════════════════════════════╗
+// ║  FILTERING                                                   ║
+// ╚══════════════════════════════════════════════════════════════╝
+
+function getFiltered(){
+  return students.filter(d=>
+    (S.fMajor==='All'||d.major===S.fMajor)&&
+    (S.fGender==='All'||d.gender===S.fGender)&&
+    d.gpa>=S.gpaMin&&d.gpa<=S.gpaMax&&
+    d.study_hours>=S.studyMin
+  );
+}
+
+function getDisplayed(){
+  const f=getFiltered();
+  if(S.brushedIds===null)return f;
+  return f.filter(d=>S.brushedIds.has(d.id));
+}
+
+// ╔══════════════════════════════════════════════════════════════╗
+// ║  LABELS                                                      ║
+// ╚══════════════════════════════════════════════════════════════╝
+
+const LABELS={
+  study_hours:'Study Hours / Week',sleep_hours:'Sleep Hours / Night',
+  attendance_pct:'Attendance %',stress_level:'Stress Level (1–10)',
+  age:'Age',semester:'Semester',gpa:'GPA (0–4.0)',mental_health_score:'Mental Health Score'
+};
+
+// ╔══════════════════════════════════════════════════════════════╗
+// ║  SCATTER PLOT (interactions: Select, Connect, Elaborate,    ║
+// ║  Reconfigure, Abstract)                                      ║
+// ╚══════════════════════════════════════════════════════════════╝
+
+let sg,gMain,W,H,xSc,ySc,brushG;
+const margin={top:6,right:16,bottom:38,left:48};
+
+function initScatter(){
+  const wrap=document.getElementById('scatterWrap');
+  const brc=wrap.getBoundingClientRect();
+  const TW=brc.width||600;
+  const TH=brc.height||320;
+  W=TW-margin.left-margin.right;
+  H=TH-margin.top-margin.bottom;
+
+  d3.select('#scatterSvg').selectAll('*').remove();
+  sg=d3.select('#scatterSvg');
+
+  gMain=sg.append('g').attr('transform',`translate(${margin.left},${margin.top})`);
+  gMain.append('g').attr('class','grid xgrid');
+  gMain.append('g').attr('class','grid ygrid');
+  gMain.append('g').attr('class','axis xaxis').attr('transform',`translate(0,${H})`);
+  gMain.append('g').attr('class','axis yaxis');
+  gMain.append('text').attr('class','xlabel').attr('x',W/2).attr('y',H+30).attr('text-anchor','middle').attr('fill','#5a5a72').attr('font-size',9.5);
+  gMain.append('text').attr('class','ylabel').attr('transform','rotate(-90)').attr('x',-H/2).attr('y',-38).attr('text-anchor','middle').attr('fill','#5a5a72').attr('font-size',9.5);
+  gMain.append('g').attr('class','dots-layer');
+  gMain.append('g').attr('class','agg-layer');
+
+  brushG=gMain.append('g').attr('class','brush');
+  const brush=d3.brush()
+    .extent([[0,0],[W,H]])
+    .on('brush',({selection})=>{
+      if(!selection)return;
+      const[[x0,y0],[x1,y1]]=selection;
+      const f=getFiltered();
+      const ids=new Set(f.filter(d=>{
+        const px=xSc(d[S.xKey]),py=ySc(d[S.yKey]);
+        return px>=x0&&px<=x1&&py>=y0&&py<=y1;
+      }).map(d=>d.id));
+      S.brushedIds=ids.size?ids:null;
+      updateAll();
+    })
+    .on('end',({selection})=>{
+      if(!selection){S.brushedIds=null;updateAll()}
+    });
+  brushG.call(brush);
+}
+
+function updateScatter(){
+  if(!gMain)return;
+  const filtered=getFiltered();
+  const displayed=getDisplayed();
+  const dispIds=new Set(displayed.map(d=>d.id));
+
+  xSc=d3.scaleLinear().domain(d3.extent(filtered,d=>d[S.xKey])).nice().range([0,W]);
+  ySc=d3.scaleLinear().domain(d3.extent(filtered,d=>d[S.yKey])).nice().range([H,0]);
+
+  gMain.select('.xgrid').attr('transform',`translate(0,${H})`)
+    .call(d3.axisBottom(xSc).tickSize(-H).tickFormat('').ticks(7));
+  gMain.select('.ygrid').call(d3.axisLeft(ySc).tickSize(-W).tickFormat('').ticks(6));
+  gMain.select('.xaxis').transition().duration(350).call(d3.axisBottom(xSc).ticks(7));
+  gMain.select('.yaxis').transition().duration(350).call(d3.axisLeft(ySc).ticks(6));
+  gMain.select('.xlabel').text(LABELS[S.xKey]);
+  gMain.select('.ylabel').text(LABELS[S.yKey]);
+  document.getElementById('scatterTitle').textContent=`${LABELS[S.xKey]} vs. ${LABELS[S.yKey]}`;
+
+  const tt=document.getElementById('tooltip');
+
+  if(S.aggregated){
+    // ABSTRACT MODE — bubbles per major
+    gMain.select('.dots-layer').selectAll('*').remove();
+    const aggD=MAJORS.map(m=>{
+      const g=filtered.filter(d=>d.major===m);
+      if(!g.length)return null;
+      return{major:m,mx:d3.mean(g,d=>d[S.xKey]),my:d3.mean(g,d=>d[S.yKey]),n:g.length,avgGpa:d3.mean(g,d=>d.gpa)};
+    }).filter(Boolean);
+    const szSc=d3.scaleSqrt().domain([0,d3.max(aggD,d=>d.n)]).range([12,48]);
+
+    const bubb=gMain.select('.agg-layer').selectAll('.bub').data(aggD,d=>d.major);
+    bubb.join(
+      e=>{const g=e.append('g').attr('class','bub');g.append('circle');g.append('text').attr('text-anchor','middle').attr('dy','0.35em').attr('fill','#eeeef8').attr('font-size',8.5).attr('pointer-events','none');return g},
+      u=>u,
+      x=>x.remove()
+    )
+    .attr('transform',d=>`translate(${xSc(d.mx)},${ySc(d.my)})`)
+    .attr('cursor','pointer')
+    .select('circle')
+    .transition().duration(400)
+    .attr('r',d=>szSc(d.n))
+    .attr('fill',d=>majorColor(d.major))
+    .attr('opacity',.72)
+    .attr('stroke',d=>majorColor(d.major))
+    .attr('stroke-width',1.5);
+
+    gMain.select('.agg-layer').selectAll('.bub text')
+      .text(d=>d.major.split(' ')[0].slice(0,5));
+
+    gMain.select('.agg-layer').selectAll('.bub')
+      .on('mousemove',(e,d)=>{
+        tt.className='tooltip vis';tt.style.left=(e.clientX+14)+'px';tt.style.top=(e.clientY-8)+'px';
+        document.getElementById('ttTitle').textContent=d.major;
+        document.getElementById('ttBody').innerHTML=`
+          <div class="tt-row"><span class="tt-k">Students</span><span class="tt-v">${d.n}</span></div>
+          <div class="tt-row"><span class="tt-k">Avg ${LABELS[S.xKey]}</span><span class="tt-v">${d.mx.toFixed(1)}</span></div>
+          <div class="tt-row"><span class="tt-k">Avg ${LABELS[S.yKey]}</span><span class="tt-v">${d.my.toFixed(2)}</span></div>
+          <div class="tt-row"><span class="tt-k">Avg GPA</span><span class="tt-v">${d.avgGpa.toFixed(2)}</span></div>`;
+      })
+      .on('mouseleave',()=>{tt.className='tooltip'});
+
+  } else {
+    // INDIVIDUAL MODE — dots
+    gMain.select('.agg-layer').selectAll('*').remove();
+    const dots=gMain.select('.dots-layer').selectAll('circle').data(filtered,d=>d.id);
+    dots.join(
+      e=>e.append('circle').attr('r',0).attr('cx',d=>xSc(d[S.xKey])).attr('cy',d=>ySc(d[S.yKey])).call(e2=>e2.transition().duration(280).attr('r',3.2)),
+      u=>u.transition().duration(380).attr('cx',d=>xSc(d[S.xKey])).attr('cy',d=>ySc(d[S.yKey])),
+      x=>x.transition().duration(180).attr('r',0).remove()
+    )
+    .attr('fill',d=>getColor(d))
+    .attr('stroke',d=>d.id===S.selectedId?'#fff':'none')
+    .attr('stroke-width',d=>d.id===S.selectedId?2:0)
+    .attr('opacity',d=>{
+      if(S.brushedIds&&!dispIds.has(d.id))return .07;
+      if(S.highlightMajor&&d.major!==S.highlightMajor)return .07;
+      return .72;
+    })
+    .attr('cursor','pointer')
+    .attr('r',d=>d.id===S.selectedId?5:3.2)
+    .on('mousemove',function(e,d){
+      tt.className='tooltip vis';tt.style.left=(e.clientX+14)+'px';tt.style.top=(e.clientY-8)+'px';
+      document.getElementById('ttTitle').textContent=`Student #${d.id}`;
+      document.getElementById('ttBody').innerHTML=`
+        <div class="tt-row"><span class="tt-k">Major</span><span class="tt-v">${d.major}</span></div>
+        <div class="tt-row"><span class="tt-k">GPA</span><span class="tt-v">${d.gpa}</span></div>
+        <div class="tt-row"><span class="tt-k">Study Hrs</span><span class="tt-v">${d.study_hours}h</span></div>
+        <div class="tt-row"><span class="tt-k">Sleep Hrs</span><span class="tt-v">${d.sleep_hours}h</span></div>
+        <div class="tt-row"><span class="tt-k">Attendance</span><span class="tt-v">${d.attendance_pct}%</span></div>
+        <div class="tt-row"><span class="tt-k">Stress</span><span class="tt-v">${d.stress_level}/10</span></div>
+        <div class="tt-row"><span class="tt-k">Mental Health</span><span class="tt-v">${d.mental_health_score}/10</span></div>
+        <div class="tt-row"><span class="tt-k">Scholarship</span><span class="tt-v">${d.scholarship?'✓ Yes':'✗ No'}</span></div>`;
+    })
+    .on('mouseleave',()=>{tt.className='tooltip'})
+    .on('click',function(e,d){
+      e.stopPropagation();
+      S.selectedId=(S.selectedId===d.id?null:d.id);
+      updateDetail();updateScatter();
+    });
+  }
+}
+
+// ╔══════════════════════════════════════════════════════════════╗
+// ║  BAR CHART (Connect + Filter)                               ║
+// ╚══════════════════════════════════════════════════════════════╝
+
+function updateBar(){
+  const el=document.getElementById('barSvg');
+  const cnt=el.parentElement;
+  const TW=cnt.clientWidth||400;
+  const TH=120;
+  const m={top:4,right:8,bottom:46,left:38};
+  const bW=TW-m.left-m.right,bH=TH-m.top-m.bottom;
+
+  d3.select(el).attr('width',TW).attr('height',TH);
+  d3.select(el).selectAll('*').remove();
+  const g=d3.select(el).append('g').attr('transform',`translate(${m.left},${m.top})`);
+
+  const filtered=getFiltered();
+  const aggD=MAJORS.map(maj=>{
+    const grp=filtered.filter(d=>d.major===maj);
+    return{major:maj,avg:grp.length?d3.mean(grp,d=>d.gpa):0,n:grp.length};
+  }).filter(d=>d.n>0);
+
+  const xB=d3.scaleBand().domain(aggD.map(d=>d.major)).range([0,bW]).padding(.22);
+  const yB=d3.scaleLinear().domain([0,4]).range([bH,0]);
+
+  g.append('g').call(d3.axisLeft(yB).tickSize(-bW).tickFormat('').ticks(4)).attr('class','grid').select('.domain').remove();
+  g.append('g').attr('class','axis').attr('transform',`translate(0,${bH})`).call(d3.axisBottom(xB).tickFormat(d=>d.split(' ')[0].slice(0,5))).selectAll('text').attr('transform','rotate(-38)').style('text-anchor','end').attr('font-size',8);
+  g.append('g').attr('class','axis').call(d3.axisLeft(yB).ticks(4).tickFormat(d=>d.toFixed(1)));
+
+  const tt=document.getElementById('tooltip');
+
+  g.selectAll('.bar').data(aggD).join('rect').attr('class','bar')
+    .attr('x',d=>xB(d.major)).attr('y',d=>yB(d.avg))
+    .attr('width',xB.bandwidth()).attr('height',d=>bH-yB(d.avg)).attr('rx',2)
+    .attr('fill',d=>majorColor(d.major))
+    .attr('opacity',d=>{
+      if(S.highlightMajor&&S.highlightMajor!==d.major)return .18;
+      return S.highlightMajor===d.major?.99:.82;
+    })
+    .attr('stroke',d=>S.highlightMajor===d.major?'#fff':'none')
+    .attr('stroke-width',.8)
+    .style('cursor','pointer')
+    .on('mousemove',(e,d)=>{
+      tt.className='tooltip vis';tt.style.left=(e.clientX+14)+'px';tt.style.top=(e.clientY-8)+'px';
+      document.getElementById('ttTitle').textContent=d.major;
+      document.getElementById('ttBody').innerHTML=`<div class="tt-row"><span class="tt-k">Avg GPA</span><span class="tt-v">${d.avg.toFixed(2)}</span></div><div class="tt-row"><span class="tt-k">Students</span><span class="tt-v">${d.n}</span></div>`;
+    })
+    .on('mouseleave',()=>{tt.className='tooltip'})
+    .on('click',(e,d)=>{
+      S.highlightMajor=S.highlightMajor===d.major?null:d.major;
+      updateAll();
+    });
+
+  g.selectAll('.blbl').data(aggD).join('text').attr('class','blbl')
+    .attr('x',d=>xB(d.major)+xB.bandwidth()/2).attr('y',d=>yB(d.avg)-3)
+    .attr('text-anchor','middle').attr('fill','#5a5a72').attr('font-size',7.5)
+    .text(d=>d.n>0?d.avg.toFixed(2):'');
+}
+
+// ╔══════════════════════════════════════════════════════════════╗
+// ║  HISTOGRAM (Filter + Encode)                                ║
+// ╚══════════════════════════════════════════════════════════════╝
+
+function updateHist(){
+  const el=document.getElementById('histSvg');
+  const cnt=el.parentElement;
+  const TW=cnt.clientWidth||400;
+  const TH=120;
+  const m={top:4,right:12,bottom:28,left:38};
+  const hW=TW-m.left-m.right,hH=TH-m.top-m.bottom;
+
+  d3.select(el).attr('width',TW).attr('height',TH);
+  d3.select(el).selectAll('*').remove();
+  const g=d3.select(el).append('g').attr('transform',`translate(${m.left},${m.top})`);
+
+  const data=getDisplayed();
+  const xH=d3.scaleLinear().domain([1,4]).range([0,hW]);
+  const bins=d3.bin().domain([1,4]).thresholds(22)(data.map(d=>d.gpa));
+  const yH=d3.scaleLinear().domain([0,d3.max(bins,d=>d.length)||1]).nice().range([hH,0]);
+
+  g.append('g').call(d3.axisLeft(yH).tickSize(-hW).tickFormat('').ticks(4)).attr('class','grid').select('.domain').remove();
+  g.append('g').attr('class','axis').attr('transform',`translate(0,${hH})`).call(d3.axisBottom(xH).ticks(6).tickFormat(d=>d.toFixed(1)));
+  g.append('g').attr('class','axis').call(d3.axisLeft(yH).ticks(4));
+
+  // Color bars by colorKey median if categorical
+  g.selectAll('.hbar').data(bins).join('rect').attr('class','hbar')
+    .attr('x',d=>xH(d.x0)+1).attr('y',d=>yH(d.length))
+    .attr('width',d=>Math.max(0,xH(d.x1)-xH(d.x0)-1)).attr('height',d=>hH-yH(d.length))
+    .attr('rx',1).attr('fill','#5ecbcb').attr('opacity',.72);
+
+  // Filter line
+  if(S.gpaMin>1){
+    g.append('line').attr('x1',xH(S.gpaMin)).attr('x2',xH(S.gpaMin)).attr('y1',0).attr('y2',hH)
+      .attr('stroke','#e8b86d').attr('stroke-width',1.5).attr('stroke-dasharray','4,3');
+    g.append('text').attr('x',xH(S.gpaMin)+3).attr('y',10).attr('fill','#e8b86d').attr('font-size',8.5).text('filter');
+  }
+  if(S.gpaMax<4){
+    g.append('line').attr('x1',xH(S.gpaMax)).attr('x2',xH(S.gpaMax)).attr('y1',0).attr('y2',hH)
+      .attr('stroke','#e8b86d').attr('stroke-width',1.5).attr('stroke-dasharray','4,3');
+    g.append('text').attr('x',xH(S.gpaMax)+3).attr('y',10).attr('fill','#e8b86d').attr('font-size',8.5).text('filter');
+  }
+
+  g.append('text').attr('x',hW/2).attr('y',hH+22).attr('text-anchor','middle').attr('fill','#5a5a72').attr('font-size',9).text('GPA');
+}
+
+// ╔══════════════════════════════════════════════════════════════╗
+// ║  LEGEND                                                      ║
+// ╚══════════════════════════════════════════════════════════════╝
+
+function updateLegend(){
+  const el=document.getElementById('legend');
+  el.innerHTML='';
+  let items=[];
+  if(S.colorKey==='major')items=MAJORS.map((m,i)=>({label:m,color:majorPalette[i]}));
+  else if(S.colorKey==='gender')items=[{label:'Male',color:'#7daee8'},{label:'Female',color:'#e06b6b'},{label:'Non-binary',color:'#c47dc4'}];
+  else if(S.colorKey==='scholarship')items=[{label:'Scholarship',color:'#e8b86d'},{label:'No Scholarship',color:'#5ecbcb'}];
+  else if(S.colorKey==='part_time_job')items=[{label:'Part-time Job',color:'#e06b6b'},{label:'No Part-time',color:'#7ecf7e'}];
+  else{el.innerHTML=`<span style="font-size:9px;color:var(--text-dim)">Color gradient encodes ${LABELS[S.colorKey]}</span>`;return}
+  items.forEach(it=>{
+    const d=document.createElement('div');
+    d.className='leg-item';
+    d.innerHTML=`<div class="leg-dot" style="background:${it.color}"></div>${it.label}`;
+    el.appendChild(d);
+  });
+}
+
+// ╔══════════════════════════════════════════════════════════════╗
+// ║  STATS                                                       ║
+// ╚══════════════════════════════════════════════════════════════╝
+
+function updateStats(){
+  const d=getDisplayed();
+  document.getElementById('sCount').textContent=d.length;
+  document.getElementById('sGpa').textContent=d.length?d3.mean(d,x=>x.gpa).toFixed(2):'—';
+  document.getElementById('sStudy').textContent=d.length?d3.mean(d,x=>x.study_hours).toFixed(1):'—';
+  document.getElementById('sSchol').textContent=d.filter(x=>x.scholarship).length;
+}
+
+// ╔══════════════════════════════════════════════════════════════╗
+// ║  DETAIL PANEL (Select)                                      ║
+// ╚══════════════════════════════════════════════════════════════╝
+
+function updateDetail(){
+  const emp=document.getElementById('detailEmpty');
+  const cnt=document.getElementById('detailContent');
+  if(!S.selectedId){emp.style.display='block';cnt.innerHTML='';return}
+  const d=students.find(s=>s.id===S.selectedId);
+  if(!d){emp.style.display='block';cnt.innerHTML='';return}
+  emp.style.display='none';
+  const gpaClass=d.gpa>=3.5?'good':d.gpa>=2.5?'warn':'bad';
+  const stressClass=d.stress_level>=7?'bad':d.stress_level>=4?'warn':'good';
+  cnt.innerHTML=[
+    ['ID',`#${d.id}`,''],['Major',d.major,''],['Gender',d.gender,''],
+    ['Age',d.age,''],['Semester',d.semester,''],
+    ['GPA',d.gpa,gpaClass],['Study Hrs',`${d.study_hours}h`,''],
+    ['Sleep Hrs',`${d.sleep_hours}h`,''],['Attendance',`${d.attendance_pct}%`,''],
+    ['Stress',`${d.stress_level}/10`,stressClass],
+    ['MH Score',`${d.mental_health_score}/10`,''],
+    ['Part-time',d.part_time_job?'✓ Yes':'—',''],
+    ['Scholarship',d.scholarship?'✓ Yes':'—',d.scholarship?'good':''],
+    ['Extracurr.',d.extracurriculars,''],
+  ].map(([k,v,c])=>`<div class="detail-row"><span class="dk">${k}</span><span class="dv ${c}">${v}</span></div>`).join('');
+}
+
+// ╔══════════════════════════════════════════════════════════════╗
+// ║  MASTER UPDATE                                              ║
+// ╚══════════════════════════════════════════════════════════════╝
+
+function updateAll(){
+  updateScatter();updateBar();updateHist();updateLegend();updateStats();
+}
+
+// ╔══════════════════════════════════════════════════════════════╗
+// ║  CONTROL EVENTS                                             ║
+// ╚══════════════════════════════════════════════════════════════╝
+
+document.getElementById('xAxis').addEventListener('change',e=>{S.xKey=e.target.value;S.brushedIds=null;updateAll()});
+document.getElementById('yAxis').addEventListener('change',e=>{S.yKey=e.target.value;S.brushedIds=null;updateAll()});
+document.getElementById('colorBy').addEventListener('change',e=>{S.colorKey=e.target.value;updateAll()});
+document.getElementById('fMajor').addEventListener('change',e=>{S.fMajor=e.target.value;S.brushedIds=null;updateAll()});
+document.getElementById('fGender').addEventListener('change',e=>{S.fGender=e.target.value;S.brushedIds=null;updateAll()});
+
+document.getElementById('gpaMin').addEventListener('input',e=>{
+  S.gpaMin=+e.target.value;document.getElementById('gpaMinV').textContent=S.gpaMin.toFixed(1);S.brushedIds=null;updateAll()});
+document.getElementById('gpaMax').addEventListener('input',e=>{
+  S.gpaMax=+e.target.value;document.getElementById('gpaMaxV').textContent=S.gpaMax.toFixed(1);S.brushedIds=null;updateAll()});
+document.getElementById('studyMin').addEventListener('input',e=>{
+  S.studyMin=+e.target.value;document.getElementById('studyMinV').textContent=S.studyMin+'h';S.brushedIds=null;updateAll()});
+
+document.getElementById('btnReset').addEventListener('click',()=>{
+  S.fMajor='All';S.fGender='All';S.gpaMin=1;S.gpaMax=4;S.studyMin=5;
+  S.brushedIds=null;S.selectedId=null;S.highlightMajor=null;
+  document.getElementById('fMajor').value='All';
+  document.getElementById('fGender').value='All';
+  document.getElementById('gpaMin').value=1;document.getElementById('gpaMinV').textContent='1.0';
+  document.getElementById('gpaMax').value=4;document.getElementById('gpaMaxV').textContent='4.0';
+  document.getElementById('studyMin').value=5;document.getElementById('studyMinV').textContent='5h';
+  updateDetail();updateAll();
+});
+
+const btnAbs=document.getElementById('btnAbstract');
+btnAbs.addEventListener('click',()=>{
+  S.aggregated=!S.aggregated;
+  btnAbs.classList.toggle('active',S.aggregated);
+  btnAbs.textContent=S.aggregated?'◉ Individual Points — Scatter':'⬡ Aggregate View — By Major';
+  updateAll();
+});
+
+// Deselect on SVG background click
+document.getElementById('scatterSvg').addEventListener('click',()=>{
+  S.selectedId=null;updateDetail();updateScatter();
+});
+
+// ╔══════════════════════════════════════════════════════════════╗
+// ║  INIT + RESIZE                                              ║
+// ╚══════════════════════════════════════════════════════════════╝
+
+window.addEventListener('load',()=>{
+  initScatter();
+  updateAll();
+});
+
+let resizeTimer;
+window.addEventListener('resize',()=>{
+  clearTimeout(resizeTimer);
+  resizeTimer=setTimeout(()=>{initScatter();updateAll()},120);
+});
+</script>
+</body>
+</html>
